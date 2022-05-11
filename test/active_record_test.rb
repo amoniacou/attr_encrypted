@@ -45,15 +45,13 @@ end
 
 ActiveRecord::MissingAttributeError = ActiveModel::MissingAttributeError unless defined?(ActiveRecord::MissingAttributeError)
 
-if ::ActiveRecord::VERSION::STRING > "4.0"
-  module Rack
-    module Test
-      class UploadedFile; end
-    end
+module Rack
+  module Test
+    class UploadedFile; end
   end
-
-  require 'action_controller/metal/strong_parameters'
 end
+
+require 'action_controller/metal/strong_parameters'
 
 class Person < ActiveRecord::Base
   self.attr_encrypted_options[:mode] = :per_attribute_iv_and_salt
@@ -85,7 +83,7 @@ class Account < ActiveRecord::Base
   attr_encrypted :password, key: :password_encryption_key
 
   def encrypting?(attr)
-    encrypted_attributes[attr][:operation] == :encrypting
+    attr_encrypted_attributes[attr][:operation] == :encrypting
   end
 
   def password_encryption_key
@@ -106,7 +104,6 @@ end
 class UserWithProtectedAttribute < ActiveRecord::Base
   self.table_name = 'users'
   attr_encrypted :password, key: SECRET_KEY
-  attr_protected :is_admin if ::ActiveRecord::VERSION::STRING < "4.0"
 end
 
 class PersonUsingAlias < ActiveRecord::Base
@@ -214,59 +211,35 @@ class ActiveRecordTest < Minitest::Test
     account = Account.find(account.id)
     assert_equal pw, account.password
     account.password = pw.reverse
-    assert_equal pw, account.password_was
+    #assert_equal pw, account.password_was
     account.save
     account.reload
     assert_equal Account::ACCOUNT_ENCRYPTION_KEY, account.key
     assert_equal pw.reverse, account.password
   end
 
-  if ::ActiveRecord::VERSION::STRING > "4.0"
-    def test_should_assign_attributes
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true).permit(:login)
-      assert_equal 'modified', @user.login
-    end
+  def test_should_assign_attributes
+    @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
+    @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true).permit(:login)
+    assert_equal 'modified', @user.login
+  end
 
-    def test_should_not_assign_protected_attributes
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true).permit(:login)
-      assert !@user.is_admin?
-    end
+  def test_should_not_assign_protected_attributes
+    @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
+    @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true).permit(:login)
+    assert !@user.is_admin?
+  end
 
-    def test_should_raise_exception_if_not_permitted
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      assert_raises ActiveModel::ForbiddenAttributesError do
-        @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true)
-      end
+  def test_should_raise_exception_if_not_permitted
+    @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
+    assert_raises ActiveModel::ForbiddenAttributesError do
+      @user.attributes = ActionController::Parameters.new(login: 'modified', is_admin: true)
     end
+  end
 
-    def test_should_raise_exception_on_init_if_not_permitted
-      assert_raises ActiveModel::ForbiddenAttributesError do
-        @user = UserWithProtectedAttribute.new ActionController::Parameters.new(login: 'modified', is_admin: true)
-      end
-    end
-  else
-    def test_should_assign_attributes
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      @user.attributes = { login: 'modified', is_admin: true }
-      assert_equal 'modified', @user.login
-    end
-
-    def test_should_not_assign_protected_attributes
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      @user.attributes = { login: 'modified', is_admin: true }
-      assert !@user.is_admin?
-    end
-
-    def test_should_assign_protected_attributes
-      @user = UserWithProtectedAttribute.new(login: 'login', is_admin: false)
-      if ::ActiveRecord::VERSION::STRING > "3.1"
-        @user.send(:assign_attributes, { login: 'modified', is_admin: true }, without_protection: true)
-      else
-        @user.send(:attributes=, { login: 'modified', is_admin: true }, false)
-      end
-      assert @user.is_admin?
+  def test_should_raise_exception_on_init_if_not_permitted
+    assert_raises ActiveModel::ForbiddenAttributesError do
+      @user = UserWithProtectedAttribute.new ActionController::Parameters.new(login: 'modified', is_admin: true)
     end
   end
 
@@ -279,23 +252,21 @@ class ActiveRecordTest < Minitest::Test
     @person = PersonWithProcMode.create(email: 'test@example.com', credentials: 'password123')
 
     # Email is :per_attribute_iv_and_salt
-    assert_equal @person.class.encrypted_attributes[:email][:mode].class, Proc
-    assert_equal @person.class.encrypted_attributes[:email][:mode].call, :per_attribute_iv_and_salt
+    assert_equal @person.class.attr_encrypted_attributes[:email][:mode].class, Proc
+    assert_equal @person.class.attr_encrypted_attributes[:email][:mode].call, :per_attribute_iv_and_salt
     refute_nil @person.encrypted_email_salt
     refute_nil @person.encrypted_email_iv
 
     # Credentials is :single_iv_and_salt
-    assert_equal @person.class.encrypted_attributes[:credentials][:mode].class, Proc
-    assert_equal @person.class.encrypted_attributes[:credentials][:mode].call, :single_iv_and_salt
+    assert_equal @person.class.attr_encrypted_attributes[:credentials][:mode].class, Proc
+    assert_equal @person.class.attr_encrypted_attributes[:credentials][:mode].call, :single_iv_and_salt
     assert_nil @person.encrypted_credentials_salt
     assert_nil @person.encrypted_credentials_iv
   end
 
-  if ::ActiveRecord::VERSION::STRING > "3.1"
-    def test_should_allow_assign_attributes_with_nil
-      @person = Person.new
-      assert_nil(@person.assign_attributes nil)
-    end
+  def test_should_allow_assign_attributes_with_nil
+    @person = Person.new
+    assert_nil(@person.assign_attributes nil)
   end
 
   def test_that_alias_encrypts_column

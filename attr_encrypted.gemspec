@@ -19,11 +19,7 @@ Gem::Specification.new do |s|
   s.required_ruby_version = '>= 2.7.0'
   s.add_dependency('encryptor', ['~> 3.0.0'])
   # support for testing with specific active record version
-  activerecord_version = if ENV.key?('ACTIVERECORD')
-    "~> #{ENV['ACTIVERECORD']}"
-  else
-    '>= 6.0.0'
-  end
+  activerecord_version = '>= 6.0.0'
   s.add_dependency 'net-smtp'
   s.add_development_dependency('activerecord', activerecord_version)
   s.add_development_dependency('actionpack', activerecord_version)
